@@ -1,92 +1,110 @@
-# yamamoto-x-post
+# yamaYT-rag-x2
 
-テーマを渡すと、山本さんの RAG データ（`insights/`）と X の最新トレンドを組み合わせて、**X（Twitter）の「記事」向け長文投稿を 1 本**生成する [Claude Code](https://claude.ai/claude-code) 用スキルです。
+山本さん向けコンテンツ用の **[Claude Code](https://claude.ai/claude-code)** スキルと RAG データをまとめたリポジトリです。
 
-実装の詳細・各ステップの指示は **`.claude/skills/yamamoto-x-post/SKILL.md`** が正本です。この README は概要とセットアップ手順です。
+| スキル | 役割 | 正本（手順・制約の詳細） |
+|--------|------|---------------------------|
+| **X 長文記事** | テーマに沿った **X（Twitter）の「記事」向け長文**を 1 本生成する | `.claude/skills/yamamoto-x-post/SKILL.md` |
+| **YouTube 台本** | 同じ RAG と X リサーチを土台に、**長尺台本（目安30分構成＋ Shorts）** を生成する | `.claude/skills/yamamoto-yt-script/SKILL.md` |
 
-## 機能（ワークフロー）
+この README は **概要・ディレクトリ構成・運用ポリシー要点・セットアップ** です。生成の粒度や承認ステップは各 `SKILL.md` に従います。
 
-1. **テーマを受け取る** → X リサーチ ON/OFF、X API の有無を確認（未設定なら案内）
-2. **X で最新情報をリサーチ**（OFF の場合はスキップ）→ WebSearch → Nitter → X API の 3 段階フォールバック
-3. **記事構成に整理**（リサーチ OFF の場合はスキップ）→ RAG に投げやすい形に構造化
-4. **山本さん RAG** → `insights/` から関連知見を抽出
-5. **X 記事（長文）を 1 本生成** → 確定後、`articles/` に Markdown で保存
+## 機能概要（ワークフロー共通イメージ）
 
-各ステップでユーザーの承認を得てから次に進みます（スキル内では選択肢 UI の利用を想定）。
+1. **テーマを受け取る** → X リサーチの ON/OFF、X API の有無を確認（未設定時は README / スキル内の案内）
+2. **X で最新情報をリサーチ**（OFF の場合はスキップ）→ Web 検索 → Nitter → X API の段階的フォールバック（詳細は各スキル）
+3. **記事構成 / 台本構成に整理**（リサーチ OFF 時はスキップすることがある）
+4. **山本さん RAG** → `insights/_routing.md` に沿って `insights/`（主）と `山本さん/`（補助）から必要箇所だけ読む
+5. **成果物を生成**  
+   - X 記事: 確定後 `articles/` に Markdown で保存  
+   - YouTube 台本: 確定後 `scripts/` に保存（運用により `scripts_tts/` に読み上げ調整版を置くこともあり）
+
+各スキル内ではステップごとにユーザーの確認を挟む想定です。
 
 ## 生成物の仕様（概要）
 
+### X「記事」長文（`yamamoto-x-post`）
+
 | 項目 | 内容 |
 |------|------|
-| 形式 | X の「記事」用の長文（マークダウン） |
+| 形式 | X の「記事」向け長文（Markdown） |
 | 分量の目安 | 約 2,000〜3,000 文字、セクション 7〜12 個 |
 | 文体 | タメ口・独り言調。ハッシュタグ・絵文字は使わない |
-| 保存先 | `articles/`（ファイル名例: `260416_theme-short-name.md`） |
+| 保存先 | `articles/`（例: `260416_theme-short-name.md`） |
+
+### YouTube 台本（`yamamoto-yt-script`）
+
+| 項目 | 内容 |
+|------|------|
+| 形式 | 本編台本（目安分量・章立て・CTA は `SKILL.md` 参照）と Shorts 案 |
+| 保存先 | 主に `scripts/`。TTS・読み分け用の派生ファイルは `scripts_tts/` などに置ける |
+
+※ RAG に載せる具体事例の件数など、記事と台本で上限が異なる場合があります。`_routing.md` と `山本さん/RAG-POLICY.md` を優先してください。
 
 ## プロジェクト構成
 
 ```
-yamamoto-rag-x/
+yamaYT-rag-x2/
 ├── README.md
-├── articles/                          ← 生成した X 記事の保存先
-├── scripts/                           ← 生成した YouTube 台本の保存先
-├── insights/                          ← 山本さんの RAG 用テキスト（主ソース）
-│   ├── _routing.md                    ← RAG仕訳インデックス（最初に読む正本）
-│   ├── {各事例}_analysis.txt
-│   └── video_prompt/                  ← YouTube台本プロンプト
-├── 山本さん/                          ← 補助 RAG ソース（旧運用の互換用）
-│   ├── RAG-POLICY.md                  ← RAG 運用ポリシー（両スキル共通）
-│   └── {各事例}.txt
+├── articles/                 ← X 長文記事の保存先
+├── scripts/                  ← YouTube 台本（本体）の保存先
+├── scripts_tts/              ← 読み上げ／TTS 向けに整理した派生 Markdown（運用により使用）
+├── tools/
+│   └── rag_retrieval_smoke_test.py  ← RAG ルーティングの簡易スモーク（外部依存なし）
+├── insights/                 ← RAG の主ソース（*_analysis.txt 等）
+│   ├── _routing.md           ← 仕訳インデックス（grep より先に読む正本）
+│   └── video_prompt/         ← 動画／台本系プロンプト断片
+├── 山本さん/                  ← 補助 RAG・運用ポリシー（互換・追記ソース）
+│   ├── RAG-POLICY.md
+│   └── …各種 *_analysis.txt など
 └── .claude/
     └── skills/
-        ├── yamamoto-x-post/
-        │   └── SKILL.md               ← X 記事スキル定義
-        └── yamamoto-yt-script/
-            └── SKILL.md               ← YouTube 台本スキル定義
+        ├── yamamoto-x-post/SKILL.md
+        └── yamamoto-yt-script/SKILL.md
 ```
 
 ## RAG データ運用ポリシー（重要）
 
-AIがテーマに対して関係ない事例を混ぜないよう、**「仕訳を先に見て、必要分だけ読む」** を基本方針としています。
-仕訳の正本は `insights/_routing.md`、補足ポリシーは `山本さん/RAG-POLICY.md`（両スキル共通）を参照。
+無関係な事例を混ぜないため、**「仕訳（`_routing.md`）を先に見て、必要分だけ読む」** が基本です。補足は `山本さん/RAG-POLICY.md`、カテゴリと優先ファイルの一覧は **`insights/_routing.md`** が正本です（本リポジトリ専用の仕訳表であり、ほかの RAG リポジトリとは同期しません）。
 
-### 原則
+### 原則（抜粋）
 
-1. **grep前に必ず `insights/_routing.md` を読む**
-2. **主カテゴリは1つ、補助カテゴリは0〜1つまで**
-3. **優先ファイルを先に5〜8本読む。足りない場合だけ追加grepする**
-4. **投稿に反映する具体事例は少数に絞る**
-   - X 記事: 1〜2 件（原則 1 件）
-   - YouTube 台本: 2〜3 件（体験談 1 件＋実践 1〜2 件）
-5. **1 投稿 1 テーマ**を徹底。複数の具体事例を過剰に混在させない
-6. **元ファイルは移動・改名しない**。新しい `*_analysis.txt` を追加したら `insights/_routing.md` に登録する
+1. **grep の前に必ず `insights/_routing.md` を読む**
+2. **主カテゴリは 1 つ、補助カテゴリは 0〜1 つまで**
+3. **優先ファイルを先に 5〜8 本読む。足りない場合だけ追加 grep**
+4. **投稿・台本に反映する具体事例は少数に絞る**（スキル・ポリシーに記載の上限に従う）
+5. **1 本作業 1 テーマ**。事例の過剰混在を避ける
+6. **元ファイルは移動・改名しない**。新規 `*_analysis.txt` は `_routing.md` に登録する
 
-### スキル実行時の自動処理
+## `tools/` のスモークテスト
 
-- RAG 検索ステップで `insights/_routing.md` と `山本さん/RAG-POLICY.md` を Read
-- ユーザーテーマから主カテゴリ1つ、補助カテゴリ0〜1つを判定
-- `_routing.md` の優先ファイルを先に5〜8本読み、足りない場合だけ `insights/` と `山本さん/` を追加grep
-- 反映フェーズで X記事は1〜2件、YouTube台本は2〜3件に絞り込み、AskUserQuestion で承認
-- 成果物保存後も RAG 元ファイルは移動・改名しない（使用済みフォルダ・履歴ログは使わない）
+`insights/` の参照やルーティング設定の整合を、依存パッケージなしでざっと確認できます。
+
+```bash
+python3 tools/rag_retrieval_smoke_test.py
+# 代表テーマのみ: python3 tools/rag_retrieval_smoke_test.py --only outsourcing
+```
+
+Claude Code 上の本番ワークフローそのものではありませんが、ローカルで「ルートとファイル名が妥当か」を手早く見る用途です。
 
 ## 必要な環境
 
-- [Claude Code](https://claude.ai/claude-code) がインストール済みであること
-- インターネット接続（X リサーチに使用）
+- [Claude Code](https://claude.ai/claude-code) がインストール済みであること（スキル利用時）
+- インターネット接続（X リサーチに使用する場合）
 
 ## セットアップ
 
 ### 1. リポジトリをクローン
 
 ```bash
-git clone https://github.com/ai776/yamamoto-rag-x.git
-cd yamamoto-rag-x
+git clone https://github.com/ai776/yamaYT-rag-x2.git
+cd yamaYT-rag-x2
 ```
 
 ### 2. X API の設定（任意）
 
-X API がなくてもスキルは動作します（WebSearch + Nitter でリサーチ）。
-設定すると X の最新投稿をリアルタイムで検索でき、**リサーチ精度が大幅に向上**します。
+X API がなくてもスキルは動作します（Web / Nitter 等でのリサーチにフォールバック）。
+設定すると X の最新投稿を検索しやすくなり、**リサーチ品質が上がりやすい**です。
 
 ---
 
@@ -179,22 +197,17 @@ curl -s -H "Authorization: Bearer ${X_API_BEARER_TOKEN}" \
 
 ## 使い方
 
-Claude Code を起動し、テーマと「X 記事を書いて」などと依頼します。
+Claude Code を起動し、テーマと「X 記事を書いて」「YouTube 台本も作って」などと依頼します。起動したスキルに従い、選択肢や確認に答えながら進めてください。
+
+**X 記事の例**
 
 ```
 プログラミングスクールの話でX記事を書いて
 ```
 
-スキルが起動すると、おおむね次の流れです。
+おおむねの流れ（`yamamoto-x-post`）: 設定確認 → リサーチ可否 → X リサーチ → 構成整理 → RAG → 長文生成 → `articles/` へ保存。
 
-1. X API の設定チェック（未設定なら案内）
-2. テーマ・X リサーチ ON/OFF の確認
-3. X リサーチ（WebSearch → Nitter → X API）
-4. 記事構成の整理
-5. RAG 検索（`insights/` から関連情報を抽出）
-6. **長文 X 記事を 1 本**生成 → 確定後に `articles/` へ保存
-
-各ステップで選択肢が表示されるので、指示に従って進めてください。
+**YouTube 台本**は `yamamoto-yt-script` の `SKILL.md` に記載の章立て・分量・ Shorts 方針に従います。
 
 ## 参考リンク
 
@@ -206,4 +219,4 @@ Claude Code を起動し、テーマと「X 記事を書いて」などと依頼
 
 ## ライセンス
 
-Private - All Rights Reserved
+リポジトリは公開されています。スキル定義・ツール・RAG 用テキスト等の利用条件は、利用者の用法に応じて権利者の判断が及ぶ場合があります。**All Rights Reserved**（無断利用・再配布の禁止など、通常の著作権法上の保護）を前提としています。商用利用や再配布が必要な場合は、権利の所在に従って別途確認してください。
